@@ -6,6 +6,12 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.security.Timestamp;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,36 +28,68 @@ public class ClientHandler implements Runnable {
 		super();
 		this.socket = socket;
 	}
+	
+	static Set<String> users = new HashSet<String>();
 
 	public void run() {
 		try {
+			
 
 			ObjectMapper mapper = new ObjectMapper();
 			BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
+			
+			DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss ");  // Date format for timestamp
+			String previousCommand = "";
 
 			while (!socket.isClosed()) {
 				String raw = reader.readLine();
 				Message message = mapper.readValue(raw, Message.class);
+														// Recording a single command pre-history:
+				String command = message.getCommand();
+				command = (command == "" || command == null) ? previousCommand : command; //doesn't work yet: empty command is not passed to the server
+				previousCommand = command;
 
-				switch (message.getCommand()) {
+				switch (command) {
 					case "connect":
 						log.info("user <{}> connected", message.getUsername());
+						users.add(message.getUsername());					//add user from the list
 						break;
-					case "disconnect":
+					case "disconnect": 
 						log.info("user <{}> disconnected", message.getUsername());
 						this.socket.close();
+						users.remove(message.getUsername());					//remove user from the list
 						break;
-					case "echo":
+					case "echo": 
 						log.info("user <{}> echoed message <{}>", message.getUsername(), message.getContents());
+//						`${timestamp} <${username}> (echo): ${contents}`
+//						String un = `${message.getUsername()}`;
+
+						// Date dateobj = new Date();
+						message.setContents( df.format(new Date()) + message.getUsername() + " (echo): " + message.getContents()); //ugly formatted output
 						String response = mapper.writeValueAsString(message);
 						writer.write(response);
+						writer.flush();
+						break;
+					case "users": 
+						log.info("user <{}> requested a list of currently connected users", message.getUsername());
+						message.setContents(users.toString().replace("[", "").replace("]", "").replace(",", "\n")); //that is ugly, will correct later
+						String response1 = mapper.writeValueAsString(message);
+				//		System.out.println(users.toString().replace("[", "").replace("]", "").replace(",", "\n"));
+						writer.write(response1);
+						writer.flush();
+						break;
+					case "":									 // in case if no commands in pre-history
+						log.info("user <{}> missed a command", message.getUsername());
+						message.setContents("a command is required"); 
+						writer.write(mapper.writeValueAsString(message));
 						writer.flush();
 						break;
 				}
 			}
 
 		} catch (IOException e) {
+		//	users.remove(message.getUsername());					//remove user from the list
 			log.error("Something went wrong :/", e);
 		}
 	}
