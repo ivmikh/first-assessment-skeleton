@@ -47,8 +47,8 @@ public class ClientHandler implements Runnable {
 				Message message = mapper.readValue(raw, Message.class);
 														// Recording a single command pre-history:
 				String command = message.getCommand();
-				command = (command == "" || command == null) ? previousCommand : command; //doesn't work yet: empty command is not passed to the server
-				previousCommand = command;
+//				command = (command == "" || command == null) ? previousCommand : command; //doesn't work yet: empty command is not passed to the server
+//				previousCommand = command;           // This is moved to Client.
 
 				switch (command) {
 					case "connect":
@@ -79,12 +79,12 @@ public class ClientHandler implements Runnable {
 						writer.write(response1);
 						writer.flush();
 						break;
-					case "":									 // in case if no commands in pre-history
-						log.info("user <{}> missed a command", message.getUsername());
-						message.setContents("a command is required"); 
-						writer.write(mapper.writeValueAsString(message));
-						writer.flush();
-						break;
+//					case "":									 // in case if no commands in pre-history
+//						log.info("user <{}> missed a command", message.getUsername());
+//						message.setContents("a command is required"); 
+//						writer.write(mapper.writeValueAsString(message));
+//						writer.flush();
+//						break;
 				}
 			}
 
