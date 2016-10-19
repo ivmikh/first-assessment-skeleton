@@ -6,11 +6,13 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.security.Timestamp;
+//import java.security.Timestamp;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -30,6 +32,8 @@ public class ClientHandler implements Runnable {
 	}
 	
 	static Set<String> users = new HashSet<String>();
+//	Map<FatCat, Set<Capitalist>> hierarchy;
+	static Map<String, Socket> connectedUsers = new HashMap<String, Socket>();
 
 	public void run() {
 		try {
@@ -40,7 +44,7 @@ public class ClientHandler implements Runnable {
 			PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
 			
 			DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss ");  // Date format for timestamp
-			String previousCommand = "";
+//			String previousCommand = "";
 
 			while (!socket.isClosed()) {
 				String raw = reader.readLine();
@@ -49,16 +53,18 @@ public class ClientHandler implements Runnable {
 				String command = message.getCommand();
 //				command = (command == "" || command == null) ? previousCommand : command; //doesn't work yet: empty command is not passed to the server
 //				previousCommand = command;           // This is moved to Client.
-
+				
 				switch (command) {
 					case "connect":
 						log.info("user <{}> connected", message.getUsername());
 						users.add(message.getUsername());					//add user from the list
+						connectedUsers.put(message.getUsername(), socket);
 						break;
 					case "disconnect": 
 						log.info("user <{}> disconnected", message.getUsername());
 						this.socket.close();
 						users.remove(message.getUsername());					//remove user from the list
+						connectedUsers.remove(message.getUsername());
 						break;
 					case "echo": 
 						log.info("user <{}> echoed message <{}>", message.getUsername(), message.getContents());
@@ -85,6 +91,24 @@ public class ClientHandler implements Runnable {
 //						writer.write(mapper.writeValueAsString(message));
 //						writer.flush();
 //						break;
+					default:
+						if (command.charAt(0) == '@') {
+							log.info("Wispered!");
+							String user2 = command.substring(1);
+							log.info("user <{}> whispered to user <{}> message: <{}>", message.getUsername(), user2, message.getContents());
+							// Date dateobj = new Date();
+							message.setCommand("echo");
+							message.setContents( df.format(new Date()) + message.getUsername() + " (whisper): " + message.getContents()); //ugly formatted output
+//							message.setContents(" (whisper)"); 
+
+							//Write to the other user:							
+							PrintWriter writerOther = new PrintWriter(connectedUsers.get(user2).getOutputStream());
+							writerOther.write(mapper.writeValueAsString(message));
+							writerOther.flush();
+							break;
+						}
+						log.info("Java doesn't recognize the command: <{}>", command);
+						break;
 				}
 			}
 

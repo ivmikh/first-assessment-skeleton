@@ -35,7 +35,8 @@ cli
 
     let color = 'blue'
     server.on('data', (buffer) => {
-      switch (Message.fromJSON(buffer).command) {
+      const command = Message.fromJSON(buffer).command
+      switch (command) {
         case 'echo':
           color = 'blue'
           break
@@ -47,6 +48,7 @@ cli
           break
         default:
           color = 'blue'
+          if (command.charAt(0) === '@') color = 'yellow'
       }
       this.log(cli.chalk[color](Message.fromJSON(buffer).toString())) // prints everything that comes from Server
     })
@@ -57,21 +59,28 @@ cli
   })
   .action(function (input, callback) {
     const inputWords = words(input)
-    let [ userCommand, ...rest ] = words(input)
+    // this.log(`You entered: <${inputWords}>`)
+    let [ userCommand, ...rest ] = inputWords
 
-    if (commands.some(cmd => cmd === userCommand)) {
+// Checking if the user provided command matches known commands:
+    if (commands.some(cmd => cmd === userCommand) || input.charAt(0) === '@') {
       command = userCommand  // The command changes
+      // this.log(`Command <${command}> recognized`)
     } else {                 // using the previous command
+      // this.log(`Command <${userCommand}> not recognized`)
       rest = inputWords
     }
     const contents = rest.join(' ')
+
+// Checking again, which is redundant:
     if (command === 'disconnect' || command === 'd') {                      // alias added
       server.end(new Message({ username, command: 'disconnect' }).toJSON() + '\n')
     } else if (command === 'echo' || command === 'e') {                     // alias added
-      // `${timestamp} <${username}> (echo): ${contents}`
       server.write(new Message({ username, command: 'echo', contents }).toJSON() + '\n')
     } else if (command === 'users' || command === 'u') {                    // alias added
       server.write(new Message({ username, command: 'users', contents }).toJSON() + '\n')
+    } else if (input.charAt(0) === '@') {                     // alias added
+      server.write(new Message({ username, command: `@${command}`, contents }).toJSON() + '\n')
     } else {
       this.log(`Command <${command}> was not recognized \n
         please, use one of the following: ${commands}`)
