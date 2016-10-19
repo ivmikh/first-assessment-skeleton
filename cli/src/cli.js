@@ -41,10 +41,13 @@ cli
           color = 'blue'
           break
         case 'users':
-          color = 'green'
+          color = 'cyan'
           break
         case 'disconnect':
           color = 'red'
+          break
+        case 'connect':
+          color = 'green'
           break
         default:
           color = 'blue'
@@ -57,6 +60,7 @@ cli
       cli.exec('exit')
     })
   })
+  // .delimiter(cli.chalk['green'](`${username}>`))
   .action(function (input, callback) {
     const inputWords = words(input)
     // this.log(`You entered: <${inputWords}>`)

@@ -31,8 +31,7 @@ public class ClientHandler implements Runnable {
 		this.socket = socket;
 	}
 	
-	static Set<String> users = new HashSet<String>();
-//	Map<FatCat, Set<Capitalist>> hierarchy;
+//	static Set<String> users = new HashSet<String>();
 	static Map<String, Socket> connectedUsers = new HashMap<String, Socket>();
 
 	public void run() {
@@ -43,7 +42,7 @@ public class ClientHandler implements Runnable {
 			BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
 			
-			DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss ");  // Date format for timestamp
+			DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");  // Date format for timestamp
 //			String previousCommand = "";
 
 			while (!socket.isClosed()) {
@@ -57,31 +56,41 @@ public class ClientHandler implements Runnable {
 				switch (command) {
 					case "connect":
 						log.info("user <{}> connected", message.getUsername());
-						users.add(message.getUsername());					//add user from the list
+						//Write to the other users:	
+						message.setContents( df.format(new Date()) + ": <" + message.getUsername() + "> has connected." ); //ugly formatted output
+					for (String user : connectedUsers.keySet()) {
+						PrintWriter writerOther = new PrintWriter(connectedUsers.get(user).getOutputStream());
+						writerOther.write(mapper.writeValueAsString(message));
+						writerOther.flush();
+					}
+					//add user from the list:
 						connectedUsers.put(message.getUsername(), socket);
 						break;
 					case "disconnect": 
 						log.info("user <{}> disconnected", message.getUsername());
-						this.socket.close();
-						users.remove(message.getUsername());					//remove user from the list
 						connectedUsers.remove(message.getUsername());
+						//Write to the other users:	
+						message.setContents( df.format(new Date()) + ": <" + message.getUsername() + "> has disconnected."); //ugly formatted output
+					for (String user : connectedUsers.keySet()) {
+						PrintWriter writerOther = new PrintWriter(connectedUsers.get(user).getOutputStream());
+						writerOther.write(mapper.writeValueAsString(message));
+						writerOther.flush();
+					}
+						this.socket.close();
 						break;
 					case "echo": 
 						log.info("user <{}> echoed message <{}>", message.getUsername(), message.getContents());
-//						`${timestamp} <${username}> (echo): ${contents}`
-//						String un = `${message.getUsername()}`;
-
 						// Date dateobj = new Date();
-						message.setContents( df.format(new Date()) + message.getUsername() + " (echo): " + message.getContents()); //ugly formatted output
+						message.setContents( df.format(new Date()) + " <" + message.getUsername() + "> (echo): " + message.getContents()); //ugly formatted output
 						String response = mapper.writeValueAsString(message);
 						writer.write(response);
 						writer.flush();
 						break;
 					case "users": 
 						log.info("user <{}> requested a list of currently connected users", message.getUsername());
-						message.setContents(users.toString().replace("[", "").replace("]", "").replace(",", "\n")); //that is ugly, will correct later
+						message.setContents(df.format(new Date()) + ": currently connected users: \n" + 
+						connectedUsers.keySet().toString().replace("[", "").replace("]", "").replace(", ", "\n")); //that is ugly, will correct later
 						String response1 = mapper.writeValueAsString(message);
-				//		System.out.println(users.toString().replace("[", "").replace("]", "").replace(",", "\n"));
 						writer.write(response1);
 						writer.flush();
 						break;
@@ -92,15 +101,11 @@ public class ClientHandler implements Runnable {
 //						writer.flush();
 //						break;
 					default:
-						if (command.charAt(0) == '@') {
-							log.info("Wispered!");
+						if (command.charAt(0) == '@') {        // whisper:
 							String user2 = command.substring(1);
 							log.info("user <{}> whispered to user <{}> message: <{}>", message.getUsername(), user2, message.getContents());
-							// Date dateobj = new Date();
-							message.setCommand("echo");
-							message.setContents( df.format(new Date()) + message.getUsername() + " (whisper): " + message.getContents()); //ugly formatted output
-//							message.setContents(" (whisper)"); 
-
+//							message.setCommand("echo");
+							message.setContents( df.format(new Date()) + " <" + message.getUsername() + "> (whisper): " + message.getContents()); //ugly formatted output
 							//Write to the other user:							
 							PrintWriter writerOther = new PrintWriter(connectedUsers.get(user2).getOutputStream());
 							writerOther.write(mapper.writeValueAsString(message));
