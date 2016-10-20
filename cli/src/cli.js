@@ -1,5 +1,5 @@
 import vorpal from 'vorpal'
-import { words } from 'lodash'
+// import { words } from 'lodash'
 import { connect } from 'net'
 import { Message } from './Message'
 
@@ -8,13 +8,13 @@ export const cli = vorpal()
 let username
 let server
 
-let hostDefault = 'localhost'
-let portDefault = 8080
+const hostDefault = 'localhost'
+const portDefault = 8080
 let host
 let port
-let command = ''
+
 // It should be a separate file commands.json with corresponding aliases, colors, and messages.
-let commands = [ 'users', 'u', 'echo', 'e', 'disconnect', 'd' ]
+let commands = [ 'users', 'u', 'echo', 'e', 'disconnect', 'd', 'broadcast', 'b' ]
 
 cli
   .delimiter(cli.chalk['yellow']('ftd~$'))
@@ -31,6 +31,9 @@ cli
     server = connect({ host: host, port: port }, () => {  // what if it cannot connect to a given host/port? (to be done!)
       server.write(new Message({ username, command: 'connect' }).toJSON() + '\n')
       callback()
+    })
+    server.listen(() => {
+      this.log('server bound')
     })
 
     let color = 'blue'
@@ -62,32 +65,32 @@ cli
   })
   // .delimiter(cli.chalk['green'](`${username}>`))
   .action(function (input, callback) {
-    const inputWords = words(input)
-    // this.log(`You entered: <${inputWords}>`)
-    let [ userCommand, ...rest ] = inputWords
+    // const inputWords = words(input)
+    const [ command, ...rest ] = input.split(' ')
 
-// Checking if the user provided command matches known commands:
-    if (commands.some(cmd => cmd === userCommand) || input.charAt(0) === '@') {
-      command = userCommand  // The command changes
-      // this.log(`Command <${command}> recognized`)
-    } else {                 // using the previous command
-      // this.log(`Command <${userCommand}> not recognized`)
-      rest = inputWords
-    }
+// // Checking if the user provided command matches known commands:
+//     if (commands.some(cmd => cmd === userCommand) || input.charAt(0) === '@') {
+//       command = userCommand  // The command changes
+//     } else {                 // using the previous command
+//       rest = input
+//     }
     const contents = rest.join(' ')
 
 // Checking again, which is redundant:
-    if (command === 'disconnect' || command === 'd') {                      // alias added
+    if (command === '' || command === 'help') {
+      this.log(`Possible commands and aliases: ${commands}`)
+    } else if (command === 'disconnect' || command === 'd') {                      // alias added
       server.end(new Message({ username, command: 'disconnect' }).toJSON() + '\n')
+    } else if (command === 'broadcast' || command === 'b') {                     // alias added
+      server.write(new Message({ username, command: 'broadcast', contents }).toJSON() + '\n')
     } else if (command === 'echo' || command === 'e') {                     // alias added
       server.write(new Message({ username, command: 'echo', contents }).toJSON() + '\n')
     } else if (command === 'users' || command === 'u') {                    // alias added
       server.write(new Message({ username, command: 'users', contents }).toJSON() + '\n')
-    } else if (input.charAt(0) === '@') {                     // alias added
-      server.write(new Message({ username, command: `@${command}`, contents }).toJSON() + '\n')
+    // } else if (command.charAt(0) === '@') {
+    //   server.write(new Message({ username, command, contents }).toJSON() + '\n')
     } else {
-      this.log(`Command <${command}> was not recognized \n
-        please, use one of the following: ${commands}`)
+      server.write(new Message({ username, command, contents }).toJSON() + '\n')
     }
 
     callback()
