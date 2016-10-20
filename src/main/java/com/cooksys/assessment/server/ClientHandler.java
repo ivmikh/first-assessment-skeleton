@@ -29,8 +29,9 @@ public class ClientHandler implements Runnable {
 		this.socket = socket;
 	}
 	
-//	static Set<String> users = new HashSet<String>();
 	static Map<String, Socket> connectedUsers = new HashMap<String, Socket>();
+	public final MessageColors messageColors = new MessageColors();
+	final DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");  // Date format for timestamp
 
 	public void run() {
 		try {
@@ -39,12 +40,12 @@ public class ClientHandler implements Runnable {
 			BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			PrintWriter writer = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
 			
-			DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");  // Date format for timestamp
 			String previousCommand = "";
 
 			while (!socket.isClosed()) {
 				String raw = reader.readLine();
 				Message message = mapper.readValue(raw, Message.class);
+				message.setTimestamp(df.format(new Date()));
 
 				String command = message.getCommand();
 				String user = message.getUsername();
@@ -56,7 +57,9 @@ public class ClientHandler implements Runnable {
 						// Checking out if the user is already connected:
 						if (connectedUsers.keySet().contains(user)) {
 							log.info("user <{}> is rejected because already connected", user);
-							message.setContents(df.format(new Date()) + ": <" + user + "> is already connected.");
+							message.setColor(messageColors.alert);
+							message.setCommand("");
+							message.setContents("<" + user + "> is already connected.");
 							String response = mapper.writeValueAsString(message);
 							writer.write(response);
 							writer.flush();
@@ -66,6 +69,7 @@ public class ClientHandler implements Runnable {
 						// add user to the list:
 
 						// Write to the other users:
+						message.setColor(messageColors.connect);
 						message.setContents(df.format(new Date()) + ": <" + user + "> has connected."); // ugly
 						for (String userAnother : connectedUsers.keySet()) {
 							PrintWriter writerOther = new PrintWriter(
@@ -80,6 +84,7 @@ public class ClientHandler implements Runnable {
 						log.info("user <{}> disconnected", message.getUsername());
 						connectedUsers.remove(message.getUsername());
 						// Write to the other users:
+						message.setColor(messageColors.disconnect);
 						message.setContents(
 								df.format(new Date()) + ": <" + message.getUsername() + "> has disconnected."); // ugly
 																												// formatted
@@ -94,10 +99,7 @@ public class ClientHandler implements Runnable {
 						break;
 					case "echo":
 						log.info("user <{}> echoed message <{}>", message.getUsername(), message.getContents());
-						// Date dateobj = new Date();
-						message.setContents(df.format(new Date()) + " <" + message.getUsername() + "> (echo): "
-								+ message.getContents()); // ugly formatted
-															// output
+						message.setColor(messageColors.echo);
 						String response = mapper.writeValueAsString(message);
 						writer.write(response);
 						writer.flush();
@@ -105,9 +107,8 @@ public class ClientHandler implements Runnable {
 						break;
 					case "users":
 						log.info("user <{}> requested a list of currently connected users", message.getUsername());
-						// that is ugly formatted line (to be improved):
-						message.setContents(df.format(new Date()) + ": currently connected users: \n" + connectedUsers
-								.keySet().toString().replace("[", "").replace("]", "").replace(", ", "\n"));
+						message.setColor(messageColors.users);
+						message.setUsername( mapper.writeValueAsString(connectedUsers.keySet()) );
 						writer.write(mapper.writeValueAsString(message));
 						writer.flush();
 						previousCommand = command;
@@ -115,8 +116,7 @@ public class ClientHandler implements Runnable {
 					case "broadcast":
 						log.info("user <{}> connected", message.getUsername());
 						// Write to the other users:
-						// `${timestamp} <${username}> (all): ${contents}`
-						message.setContents(df.format(new Date()) + " <" + user + "> (all): " + message.getContents()); // ugly
+						message.setColor(messageColors.broadcast);
 						for (String userAnother : connectedUsers.keySet()) {
 							PrintWriter writerOther = new PrintWriter(
 									connectedUsers.get(userAnother).getOutputStream());
@@ -127,28 +127,33 @@ public class ClientHandler implements Runnable {
 						break;
 					case "": // in case if it happens
 						log.info("user <{}> missed a command", message.getUsername());
+						message.setColor(messageColors.warning);
 						message.setContents("a command is required");
 						writer.write(mapper.writeValueAsString(message));
 						writer.flush();
 						break;
 					case "@":
 						log.info("user <{}> whispered to nobody message: <{}>", user, message.getContents());
-						message.setContents("No username is provided. The proper usage is <@username> <message>");
+						message.setColor(messageColors.warning);
+						message.setCommand("");
+						message.setContents("No username is provided. The proper usage is <@username message>");
 						writer.write(mapper.writeValueAsString(message));
 						writer.flush();
+						previousCommand = command;
 						break;
 					default:
 						if (command.charAt(0) != '@') { // Unknown command:
-							if (previousCommand != "") {
+							if (previousCommand != "") { // Checking for a previous command:
 								message.setCommand(previousCommand);
 								message.setContents(command + " " + message.getContents());
 								command = previousCommand;
 								repeatCommand = true;
 								break;
-							}
+							} // if no Previous command is available:
 							log.info("user <{}> gave non-recognised command <{}>", user, command);
-							message.setContents(
-									df.format(new Date()) + ": Server doesn't recognise command <" + command + ">.");
+							message.setColor(messageColors.warning);
+							message.setCommand("");
+							message.setContents("Server doesn't recognise command <" + command + ">.");
 							writer.write(mapper.writeValueAsString(message));
 							writer.flush();
 							break;
@@ -159,7 +164,9 @@ public class ClientHandler implements Runnable {
 						if (!connectedUsers.containsKey(user2)) {
 							log.info("user <{}> whispered to non-connected user <{}> message <{}>", user, user2,
 									message.getContents());
-							message.setContents(df.format(new Date()) + ": user <" + user2 + "> is not connected");
+							message.setColor(messageColors.warning);
+							message.setCommand("@");
+							message.setContents("user <" + user2 + "> is not connected.");
 							writer.write(mapper.writeValueAsString(message));
 							writer.flush();
 							break;
@@ -170,9 +177,8 @@ public class ClientHandler implements Runnable {
 							log.info("user <{}> whispered to user <{}> message: <{}>", message.getUsername(), user2,
 									message.getContents());
 						}
-						message.setContents(
-								df.format(new Date()) + " <" + user + "> (whisper): " + message.getContents()); // ugly
-						// Write to the other user:
+						message.setColor(messageColors.whisper);
+						// Whisper to the other user:
 						PrintWriter writerOther = new PrintWriter(connectedUsers.get(user2).getOutputStream());
 						writerOther.write(mapper.writeValueAsString(message));
 						writerOther.flush();
@@ -186,4 +192,15 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
+}
+
+class MessageColors {
+	 final public String alert = "red";
+	 final public String warning = "yellow";
+	 final public String users = "blue";
+	 final public String echo = "white";
+	 final public String broadcast = "cyan";
+	 final public String whisper = "gray";
+	 final public String connect = "green";
+	 final public String disconnect = "magenta";
 }

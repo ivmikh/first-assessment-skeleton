@@ -32,31 +32,11 @@ cli
       server.write(new Message({ username, command: 'connect' }).toJSON() + '\n')
       callback()
     })
-    server.listen(() => {
-      this.log('server bound')
-    })
 
-    let color = 'blue'
+    // let color = 'blue'
     server.on('data', (buffer) => {
-      const command = Message.fromJSON(buffer).command
-      switch (command) {
-        case 'echo':
-          color = 'blue'
-          break
-        case 'users':
-          color = 'cyan'
-          break
-        case 'disconnect':
-          color = 'red'
-          break
-        case 'connect':
-          color = 'green'
-          break
-        default:
-          color = 'blue'
-          if (command.charAt(0) === '@') color = 'yellow'
-      }
-      this.log(cli.chalk[color](Message.fromJSON(buffer).toString())) // prints everything that comes from Server
+      const msg = Message.fromJSON(buffer)
+      this.log(cli.chalk[msg.color](msg.toString())) // prints everything that comes from Server
     })
 
     server.on('end', () => {
