@@ -3,8 +3,8 @@ package com.cooksys.assessment.server;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 import org.slf4j.Logger;
@@ -16,7 +16,7 @@ public class Server implements Runnable {
 	private int port;
 	private ExecutorService executor;
 	
-	private Map<String, Socket> connectedUsers = new HashMap<String, Socket>();
+	private Map<String, Socket> connectedUsers = new ConcurrentHashMap<String, Socket>();
 	
 	public Server(int port, ExecutorService executor) {
 		super();
@@ -35,7 +35,7 @@ public class Server implements Runnable {
 				executor.execute(handler);
 			}
 		} catch (IOException e) {
-			log.error("Something went wrong :/", e);
+			log.error("Server: Something went wrong :/", e);
 		}
 	}
 

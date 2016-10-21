@@ -26,7 +26,7 @@ public class Main {
 			executor.shutdown();
 			executor.awaitTermination(5, TimeUnit.SECONDS);
 		} catch (InterruptedException | ExecutionException e) {
-			log.error("Something went wrong :/", e);
+			log.error("Main: Something went wrong :/", e);
 		}
 	}
 	

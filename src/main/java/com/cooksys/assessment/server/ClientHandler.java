@@ -6,7 +6,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
-//import java.security.Timestamp;
+import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -30,8 +30,6 @@ public class ClientHandler implements Runnable {
 		this.socket = socket;
 		this.connectedUsers = connectedUsers;
 	}
-	
-//	static Map<String, Socket> connectedUsers = new HashMap<String, Socket>();
 
 	final DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");  // Date format for timestamp
 
@@ -47,7 +45,8 @@ public class ClientHandler implements Runnable {
 			while (!socket.isClosed()) {
 				String raw = reader.readLine();
 				Message message = mapper.readValue(raw, Message.class);
-				message.setTimestamp(df.format(new Date()));
+//				message.setTimestamp(message.getTimestamp);
+				message.setTimestamp(new Timestamp(new Date().getTime()).toString());
 
 				String command = message.getCommand();
 				String user = message.getUsername();
@@ -72,7 +71,7 @@ public class ClientHandler implements Runnable {
 
 						// Write to the other users:
 						message.setColor(MessageColors.connect.color());
-						message.setContents(df.format(new Date()) + ": <" + user + "> has connected."); // ugly
+						message.setContents(message.getTimestamp() + ": <" + user + "> has connected."); // ugly
 						for (String userAnother : connectedUsers.keySet()) {
 							PrintWriter writerOther = new PrintWriter(
 									connectedUsers.get(userAnother).getOutputStream());
@@ -88,7 +87,7 @@ public class ClientHandler implements Runnable {
 						// Write to the other users:
 						message.setColor(MessageColors.disconnect.color());
 						message.setContents(
-								df.format(new Date()) + ": <" + message.getUsername() + "> has disconnected."); // ugly
+								message.getTimestamp() + ": <" + message.getUsername() + "> has disconnected."); // ugly
 																												// formatted
 																												// output
 						for (String userAnother : connectedUsers.keySet()) {
@@ -116,15 +115,8 @@ public class ClientHandler implements Runnable {
 						previousCommand = command;
 						break;
 					case "broadcast":
-						log.info("user <{}> connected", message.getUsername());
-						// Write to the other users:
-						message.setColor(MessageColors.broadcast.color());
-						for (String userAnother : connectedUsers.keySet()) {
-							PrintWriter writerOther = new PrintWriter(
-									connectedUsers.get(userAnother).getOutputStream());
-							writerOther.write(mapper.writeValueAsString(message));
-							writerOther.flush();
-						}
+//						log.info("user <{}> broadcast message <{}>", message.getUsername(), message.getContents());
+						message.broadcast(connectedUsers);
 						previousCommand = command;
 						break;
 					case "": // in case if it happens
@@ -163,7 +155,7 @@ public class ClientHandler implements Runnable {
 						// Whispering:
 						String user2 = command.substring(1);
 						previousCommand = command;
-						if (!connectedUsers.containsKey(user2)) {
+						if (!connectedUsers.containsKey(user2)) { // destination user not found
 							log.info("user <{}> whispered to non-connected user <{}> message <{}>", user, user2,
 									message.getContents());
 							message.setColor(MessageColors.warning.color());
@@ -173,25 +165,26 @@ public class ClientHandler implements Runnable {
 							writer.flush();
 							break;
 						}
-						if (user2 == user) {
-							log.info("user <{}> whispered to himself message: <{}>", user, message.getContents());
-						} else {
-							log.info("user <{}> whispered to user <{}> message: <{}>", message.getUsername(), user2,
-									message.getContents());
-						}
 						message.setCommand("@");
 						message.setColor(MessageColors.whisper.color());
-						// Whisper to the other user:
-						PrintWriter writerOther = new PrintWriter(connectedUsers.get(user2).getOutputStream());
-						writerOther.write(mapper.writeValueAsString(message));
-						writerOther.flush();
+						if (user2 == user) { // whisper to yourself:
+							log.info("user <{}> whispered to himself message: <{}>", user, message.getContents());
+							writer.write(mapper.writeValueAsString(message));
+							writer.flush();
+						} else { // Whisper to another user:
+							log.info("user <{}> whispered to user <{}> message: <{}>", message.getUsername(), user2,
+									message.getContents());
+							PrintWriter writerOther = new PrintWriter(connectedUsers.get(user2).getOutputStream());
+							writerOther.write(mapper.writeValueAsString(message));
+							writerOther.flush();
+						}
 						break;
 					} // switch end
 				} // while repeat command end
 			} // while end
 		} catch (IOException e) {
 		//	users.remove(message.getUsername());					//remove user from the list
-			log.error("Something went wrong :/", e);
+			log.error("ClientHandler: Something went wrong :/", e);
 		}
 	}
 
