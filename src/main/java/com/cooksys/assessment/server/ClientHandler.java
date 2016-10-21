@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.cooksys.assessment.model.Message;
+import com.cooksys.assessment.model.MessageColors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ClientHandler implements Runnable {
@@ -55,13 +56,15 @@ public class ClientHandler implements Runnable {
 					case "connect":
 						// Checking out if the user is already connected:
 						if (connectedUsers.keySet().contains(user)) {
-							log.info("user <{}> is rejected because already connected", user);
 							message.setColor(MessageColors.alert.color());
 							message.setCommand("");
 							message.setContents("<" + user + "> is already connected.");
 							String response = mapper.writeValueAsString(message);
-							writer.write(response);
-							writer.flush();
+							synchronized (message) {
+								writer.write(response);
+								writer.flush();
+								log.info("user <{}> is rejected because already connected", user);
+							}
 							this.socket.close();
 							break;
 						}
@@ -90,19 +93,23 @@ public class ClientHandler implements Runnable {
 						previousCommand = command;
 						break;
 					case "": // in case if it happens
-						log.info("user <{}> missed a command", message.getUsername());
 						message.setColor(MessageColors.warning.color());
 						message.setContents("a command is required");
-						writer.write(mapper.writeValueAsString(message));
-						writer.flush();
+						synchronized (message) {
+							writer.write(mapper.writeValueAsString(message));
+							writer.flush();
+							log.info("user <{}> missed a command", message.getUsername());
+						}
 						break;
 					case "@":
-						log.info("user <{}> whispered to nobody message: <{}>", user, message.getContents());
 						message.setColor(MessageColors.warning.color());
 						message.setCommand("");
 						message.setContents("No username is provided. The proper usage is <@username message>");
-						writer.write(mapper.writeValueAsString(message));
-						writer.flush();
+						synchronized (message) {
+							writer.write(mapper.writeValueAsString(message));
+							writer.flush();
+							log.info("user <{}> whispered to nobody message: <{}>", user, message.getContents());
+						}
 						previousCommand = command;
 						break;
 					default:
@@ -114,25 +121,30 @@ public class ClientHandler implements Runnable {
 								repeatCommand = true;
 								break;
 							} // if no Previous command is available:
-							log.info("user <{}> gave non-recognised command <{}>", user, command);
+							
 							message.setColor(MessageColors.warning.color());
 							message.setCommand("");
 							message.setContents("Server doesn't recognise command <" + command + ">.");
-							writer.write(mapper.writeValueAsString(message));
-							writer.flush();
+							synchronized (message) {
+								writer.write(mapper.writeValueAsString(message));
+								writer.flush();
+								log.info("user <{}> gave non-recognised command <{}>", user, command);
+							}
 							break;
 						}
 						// Whispering:
 						String user2 = command.substring(1);
 						previousCommand = command;
 						if (!connectedUsers.containsKey(user2)) { // destination user not found
-							log.info("user <{}> whispered to non-connected user <{}> message <{}>", user, user2,
-									message.getContents());
 							message.setColor(MessageColors.warning.color());
 							message.setCommand("");
 							message.setContents("user <" + user2 + "> is not connected.");
-							writer.write(mapper.writeValueAsString(message));
-							writer.flush();
+							synchronized (message) {
+								writer.write(mapper.writeValueAsString(message));
+								writer.flush();
+								log.info("user <{}> whispered to non-connected user <{}> message <{}>", user, user2,
+										message.getContents());
+							}
 							break;
 						}
 						message.whisper(user2, writer, connectedUsers);
@@ -145,19 +157,4 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
-}
-
-enum MessageColors {
-	alert("red"), warning("yellow"), users("blue"), echo("white"), broadcast("cyan"), whisper("gray"), 
-	connect("green"), disconnect("magenta");
-
-	private String color;
-
-	MessageColors(String color) {
-		this.color = color;
-	}
-
-	public String color() {
-		return color;
-	}
 }
